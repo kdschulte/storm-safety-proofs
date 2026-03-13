@@ -1,0 +1,341 @@
+\documentclass[11pt,a4paper]{article}
+
+% Standard arXiv-friendly packages
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage[margin=1in]{geometry}
+\usepackage{enumitem}
+\usepackage{authblk}
+\usepackage{xcolor}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue!70!black,
+  citecolor=blue!70!black,
+  urlcolor=blue!70!black
+}
+
+\newtheorem{definition}{Definition}
+\newtheorem{property}{Property}
+\newtheorem{conjecture}{Conjecture}
+\newtheorem{remark}{Remark}
+
+\title{Open Problems in Formal Verification of\\Modular Compositional AI Systems}
+
+\author[1]{Kim Daniel Schulte-Zurhausen}
+\affil[1]{KDSZ Investments Ltd, London, UK\\
+\texttt{kim@kdszinvestments.com}}
+
+\date{March 2026}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+We describe an AI architecture in which independently trained expert modules are permanently frozen after creation and dynamically composed through sparse top-K routing in a shared representation space.
+This architecture differs structurally from standard mixture-of-experts systems in four respects: modules are trained independently (no shared gradients), permanently frozen (immutable functions), dynamically added or removed (open pool), and composed via an explicit sparse graph at each inference step.
+We present empirical evidence from 260+ experiments suggesting that these structural constraints may enable formal mathematical reasoning about safety-relevant properties, specifically attribution, guaranteed forgetting, non-degradation, memory isolation, and compositional monotonicity, that are intractable in jointly-trained architectures.
+We state each property precisely and pose open mathematical questions amenable to formal analysis, inviting contributions from the formal methods, learning theory, and information theory communities.
+
+\medskip
+\noindent\textbf{Repository:} \url{https://github.com/kdschulte/storm-safety-proofs}
+\end{abstract}
+
+% ============================================================
+\section{Introduction}
+\label{sec:intro}
+% ============================================================
+
+The safety verification of neural networks is a central challenge in AI safety research~\cite{amodei2016concrete}.
+For monolithic architectures, including transformers, large language models, and jointly-trained mixture-of-experts systems~\cite{shazeer2017outrageously,fedus2022switch}, formal reasoning about properties such as knowledge attribution~\cite{sundararajan2017axiomatic}, guaranteed forgetting~\cite{bourtoule2021machine}, and compositional stability remains intractable in practice.
+The fundamental difficulty is that knowledge in these systems is distributed across entangled parameters~\cite{bricken2023monosemanticity}, making it impossible to localise influence, bound contributions, or guarantee removal of specific knowledge.
+
+We study an architecture that introduces structural constraints designed to make such reasoning tractable.
+The system consists of a pool of independently trained expert modules, each frozen after creation, composed at inference time through sparse top-K routing~\cite{shazeer2017outrageously} in a shared representation space.
+These constraints---independent training, permanent freezing, dynamic pool membership, and explicit composition graphs---collectively produce a class of compositional AI system that is structurally different from standard mixture-of-experts.
+
+This paper makes two contributions:
+\begin{enumerate}[nosep]
+  \item We state six safety-relevant properties precisely, describe the structural constraints that may make them provable, and present empirical evidence from 260+ experiments motivating formal treatment.
+  \item We pose each property as an open mathematical question, identifying the relevant proof strategies and inviting contributions from the formal methods, learning theory, and information theory communities.
+\end{enumerate}
+
+\noindent This is not a theoretical paper claiming proofs.
+It is a research programme statement: here are the questions, here is why we believe they are tractable, and here is the evidence that the structural constraints produce the expected mathematical behaviour in practice.
+
+% ============================================================
+\section{Architecture}
+\label{sec:arch}
+% ============================================================
+
+The architecture follows the modular deep learning paradigm~\cite{pfeiffer2023modular}, in which independently trained modules compose within a shared representation space.
+
+\begin{definition}[Modular Compositional System]
+A modular compositional system $\mathcal{S}$ consists of:
+\begin{itemize}[nosep]
+  \item A \textbf{module pool} $\mathcal{M} = \{m_1, m_2, \ldots, m_N\}$ where each $m_i : \mathbb{R}^d \to \mathbb{R}^d$ is a frozen function mapping from and to a shared representation space of dimension $d$.
+  \item A \textbf{router} $R : \mathbb{R}^d \to \Delta^K_N$ that selects $K$ modules per input position with explicit non-negative weights summing to 1.
+  \item A \textbf{shared backbone} providing the representation space and any shared computation (e.g., attention, embedding).
+\end{itemize}
+For input representation $\mathbf{x} \in \mathbb{R}^d$ at position $t$, let $(i_1, w_1), \ldots, (i_K, w_K) = R(\mathbf{x})$ with $\sum_{k=1}^{K} w_k = 1$ and $w_k \geq 0$. The composed output is:
+\begin{equation}
+\label{eq:composition}
+\mathbf{y}_t = \sum_{k=1}^{K} w_k \cdot m_{i_k}(\mathbf{x})
+\end{equation}
+\end{definition}
+
+\subsection{Structural Constraints}
+
+Four constraints distinguish this architecture from standard mixture-of-experts:
+
+\begin{enumerate}[nosep,leftmargin=*]
+  \item \textbf{Independent training.} Each module $m_i$ is trained on its own data using its own loss function. No gradients flow between modules during training. Modules have no knowledge of each other's existence.
+  
+  \item \textbf{Permanent freezing.} Once trained, module weights are immutable: $\nabla_{\theta_i} = 0$ for all $i$ during and after composition. Each module is a fixed function.
+  
+  \item \textbf{Dynamic pool membership.} Modules can be added to or removed from $\mathcal{M}$ at any time. Adding module $m_{N+1}$ requires no retraining of $m_1, \ldots, m_N$. Removing module $m_j$ requires only updating the router.
+  
+  \item \textbf{Explicit composition graph.} Each inference step over a sequence of length $T$ induces a sparse bipartite graph $G = (V_{\text{pos}}, V_{\text{mod}}, E)$ where edge $(t, i) \in E$ has weight $w_{t,i}$ recording the contribution of module $m_i$ to position $t$. This graph is a concrete, observable mathematical object.
+\end{enumerate}
+
+\begin{remark}
+In standard MoE (Switch Transformer~\cite{fedus2022switch}, GShard~\cite{lepikhin2021gshard}, Mixtral~\cite{jiang2024mixtral}), experts share gradients during training, weights are mutable, the pool is fixed at training time, and knowledge is distributed across all experts. These design choices make the same formal questions intractable for the same reasons they are intractable in monolithic models.
+\end{remark}
+
+% ============================================================
+\section{Safety Properties and Open Problems}
+\label{sec:properties}
+% ============================================================
+
+We state six safety-relevant properties, describe the empirical evidence motivating each, and pose the associated open mathematical questions.
+
+\subsection{Attribution}
+\label{sec:attribution}
+
+\begin{property}[Attribution]
+For any output token $y_t$ produced by the system, there exists a decomposition of the output into per-module contributions with explicit weights, such that the contribution of each module $m_i$ is identifiable and bounded.
+\end{property}
+
+\noindent\textbf{Empirical evidence.} The composition rule (Equation~\ref{eq:composition}) provides attribution directly: the weight $w_k$ assigned to module $m_{i_k}$ at position $t$ quantifies its contribution. In our experiments with modules across multiple knowledge domains, lightweight domain-specific modules achieve discrimination ratios exceeding two orders of magnitude, earning high routing weight on their domain and near-zero weight on unrelated inputs. This structural attribution differs from post-hoc methods such as integrated gradients~\cite{sundararajan2017axiomatic} in that the decomposition is given by the architecture, not estimated after the fact.
+
+\begin{conjecture}[Meaningful Attribution]
+Under what conditions on the router $R$ and modules $\{m_i\}$ does the weight decomposition in Equation~\ref{eq:composition} constitute a \emph{meaningful} attribution, i.e., one where removing a module with weight $w$ from the composition changes the output by $\Theta(w)$?
+\end{conjecture}
+
+\noindent\textbf{Proof strategy.} The convex combination structure provides a natural starting point. The key question is whether the modules are sufficiently ``spread'' in the representation space that weight directly corresponds to influence. This may connect to the theory of convex decompositions and basis pursuit.
+
+\subsection{Guaranteed Forgetting}
+\label{sec:forgetting}
+
+\begin{property}[Guaranteed Forgetting]
+Removing module $m_j$ from the pool $\mathcal{M}$ eliminates all knowledge associated with $m_j$ from all future outputs of the system.
+\end{property}
+
+\noindent\textbf{Empirical evidence.} In our experiments, removing a domain-specific module eliminates that domain's content from outputs. A substantial fraction of routing weight is allocated to memory-type modules; removing a memory module causes the router to redistribute weight among remaining modules with no trace of the removed content. This contrasts with approximate unlearning methods~\cite{bourtoule2021machine} that offer statistical rather than structural guarantees.
+
+\begin{conjecture}[Information-Theoretic Forgetting]
+Let $D_j$ be the training data of module $m_j$. After removing $m_j$ from $\mathcal{M}$ and updating the router, is the mutual information $I(D_j; Y_t) = 0$ for all future outputs $Y_t$? Under what conditions on the shared backbone and remaining modules does this hold?
+\end{conjecture}
+
+\noindent\textbf{Proof strategy.} The permanent freezing constraint is key: since no other module's weights were influenced by $D_j$ during training (independent training), and no other module's weights changed after $m_j$ was added (frozen), any information about $D_j$ in the system is localised to $m_j$ itself and the router's learned preferences. The open question is the router's residual information about $D_j$.
+
+\subsection{Non-Degradation}
+\label{sec:nondeg}
+
+\begin{property}[Non-Degradation]
+Adding a new module $m_{N+1}$ to the pool does not degrade the system's performance on any existing capability.
+\end{property}
+
+\noindent\textbf{Empirical evidence.} Expanding the module pool by approximately 25\% preserves evaluation quality within tight bounds. Leave-one-out ablation confirms all domain groups contribute positively.
+
+\begin{conjecture}[PAC-Style Non-Degradation]
+Given a pool $\mathcal{M}$ of $N$ frozen modules with router $R$ achieving expected loss $L_N$ on distribution $\mathcal{D}$, adding module $m_{N+1}$ and retraining only $R$ yields expected loss $L_{N+1} \leq L_N + \epsilon$ with probability at least $1 - \delta$, for some $\epsilon, \delta$ that depend on the number of routing samples and the capacity of $R$.
+\end{conjecture}
+
+\noindent\textbf{Proof strategy.} Since existing modules are frozen and only the router changes, this becomes a question about the sample complexity of learning a routing policy over $N+1$ options versus $N$ options. PAC-Bayes bounds~\cite{valiant1984theory} or Rademacher complexity arguments for the router class may apply.
+
+\subsection{Memory Isolation}
+\label{sec:isolation}
+
+\begin{property}[Memory Isolation]
+A module $m_j$ designated as user-specific has negligible influence on outputs for other users.
+\end{property}
+
+\noindent\textbf{Empirical evidence.} The sparse top-K routing mechanism means that at most $K$ modules contribute to any given output. When $K \ll N$, a user-specific module is selected only when the router deems it relevant. In our experiments with $K \ll N$, domain-specific modules receive near-zero routing weight on unrelated inputs, with discrimination ratios exceeding two orders of magnitude.
+
+\begin{conjecture}[Differential Privacy of Routing]
+Can the sparse routing mechanism be shown to satisfy $(\epsilon, \delta)$-differential privacy~\cite{dwork2014algorithmic} with respect to the presence or absence of a specific module in the pool? If so, what are the privacy parameters as a function of $K$, $N$, and the router architecture?
+\end{conjecture}
+
+\noindent\textbf{Proof strategy.} The sparsity of routing ($K \ll N$) limits the influence of any single module. This may connect to the literature on differential privacy in mechanism design~\cite{dwork2014algorithmic}, where the ``mechanism'' is the router and the ``database'' is the module pool.
+
+\subsection{Bounded Compute}
+\label{sec:bounded}
+
+\begin{property}[Bounded Compute]
+Inference cost is $O(K)$ per position regardless of pool size $N$, where $K$ is the number of selected modules.
+\end{property}
+
+\noindent This property follows directly from the architecture: top-K selection is $O(N)$ (or $O(N \log K)$ with a heap), and the composition step invokes exactly $K$ module forward passes. Since $K$ is fixed, inference is constant in $N$. This is the only property we consider proven from the architecture definition.
+
+\subsection{Compositional Monotonicity}
+\label{sec:monotonicity}
+
+\begin{property}[Compositional Monotonicity]
+Adding a domain-specific module $m_j$ trained on domain $\mathcal{D}_j$ improves performance on $\mathcal{D}_j$ without degrading performance on other domains $\mathcal{D}_i$ for $i \neq j$.
+\end{property}
+
+\noindent\textbf{Empirical evidence.} Leave-one-out ablation across all domain groups confirms that each group contributes positively to its own evaluation set and does not degrade others.
+
+\begin{conjecture}[Finite-Sample Monotonicity]
+Under what conditions on the module training procedure and router architecture does adding a module trained on $\mathcal{D}_j$ improve expected loss on $\mathcal{D}_j$ by at least $\gamma > 0$ while increasing expected loss on $\mathcal{D}_i$ ($i \neq j$) by at most $\epsilon$, with high probability?
+\end{conjecture}
+
+\noindent\textbf{Proof strategy.} This combines the non-degradation argument (router sample complexity) with a domain-specific improvement bound. The key insight is that if $m_j$ is the best available module for inputs from $\mathcal{D}_j$, the router will learn to select it, improving domain performance. The non-degradation bound constrains the cost on other domains.
+
+% ============================================================
+\section{Experimental Summary}
+\label{sec:experiments}
+% ============================================================
+
+The architecture has been implemented and tested across 260+ experiments on consumer hardware. Key results that motivate the formal programme are summarised in Table~\ref{tab:experiments}.
+
+\begin{table}[h]
+\centering
+\caption{Summary of experimental observations motivating formal treatment.}
+\label{tab:experiments}
+\begin{tabular}{@{}lll@{}}
+\toprule
+\textbf{Observation} & \textbf{Evidence} & \textbf{Motivates} \\
+\midrule
+Modules compose to outperform individuals & Routed pool outperforms best single module & Attribution, Monotonicity \\
+Sharp domain discrimination & Ratios exceeding two orders of magnitude & Attribution, Isolation \\
+Pool expansion preserves quality & Quality stable under ${\sim}25\%$ pool growth & Non-Degradation \\
+Learned router utilises most modules & Majority of pool selected across inputs & Composition Graph \\
+Memory modules carry substantial weight & Removable, localisable knowledge & Forgetting, Isolation \\
+Leave-one-out: all domains positive & Every domain group contributes positively & Monotonicity \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Full experimental data and sanitised datasets are available in the public repository.
+
+% ============================================================
+\section{Related Work}
+\label{sec:related}
+% ============================================================
+
+\textbf{Mixture-of-Experts.} The sparsely-gated mixture-of-experts architecture~\cite{shazeer2017outrageously} and its descendants, including Switch Transformer~\cite{fedus2022switch}, GShard~\cite{lepikhin2021gshard}, and Mixtral~\cite{jiang2024mixtral}, train experts jointly with shared gradients, producing entangled knowledge representations. Our independent training and permanent freezing constraints create a structurally different system.
+
+\textbf{Modular Networks.} Neural module networks~\cite{andreas2016neural} compose specialised modules for visual question answering, but modules are jointly trained and task-specific. More recently, Pfeiffer et al.~\cite{pfeiffer2023modular} survey the broader modular deep learning landscape. Our modules are domain-general frozen functions that compose in a shared vector space.
+
+\textbf{Retrieval-Augmented Generation.} RAG systems~\cite{lewis2020retrieval} compose a generator with retrieved documents, but the generator is monolithic and the ``composition'' is concatenation in input space, not convex combination in representation space.
+
+\textbf{Machine Unlearning.} The growing literature on machine unlearning~\cite{bourtoule2021machine} seeks to remove data influence from trained models. Our architecture may offer a structural solution: if knowledge is localised in a frozen module, ``unlearning'' is module removal.
+
+\textbf{Formal Verification of Neural Networks.} Existing work on formal verification of neural networks~\cite{katz2017reluplex} focuses on input-output properties of fixed networks (e.g., robustness bounds). Our questions concern compositional properties of modular systems, a different class of formal problem that involves reasoning about module selection and combination rather than individual network behaviour.
+
+% ============================================================
+\section{Discussion}
+\label{sec:discussion}
+% ============================================================
+
+We have described an architecture whose structural constraints---independent training, permanent freezing, dynamic pool membership, and explicit composition graphs---may enable formal mathematical reasoning about safety-relevant properties.
+We do not claim that these properties are proven.
+We claim that the structural constraints create mathematical objects (frozen functions, composition graphs, additive knowledge pools) that are amenable to analysis in ways that monolithic and jointly-trained architectures are not.
+
+The empirical evidence from 260+ experiments is encouraging but not sufficient.
+The research programme requires formal methods expertise, specifically in PAC learning theory~\cite{valiant1984theory}, information theory, differential privacy~\cite{dwork2014algorithmic}, and formal verification~\cite{katz2017reluplex}, to translate empirical observations into rigorous results.
+We invite contributions from these communities.
+
+\paragraph{Limitations.}
+The current experimental evidence is on a system with dozens of lightweight modules running on consumer hardware.
+It is an open question whether the structural properties scale to larger module counts and parameter sizes.
+The router is a learned component whose theoretical properties require separate analysis.
+The shared backbone (attention, embedding) is not modular and represents a potential source of entanglement that must be addressed in any complete formal treatment.
+
+\paragraph{Reproducibility.}
+The mathematical specification, sanitised experimental data, and proof agenda are available at \url{https://github.com/kdschulte/storm-safety-proofs}.
+
+% ============================================================
+% REFERENCES
+% ============================================================
+\begin{thebibliography}{14}
+
+\bibitem{amodei2016concrete}
+D.~Amodei, C.~Olah, J.~Steinhardt, P.~Christiano, J.~Schulman, and D.~Man\'{e}.
+\newblock Concrete problems in {AI} safety.
+\newblock \emph{arXiv:1606.06565}, 2016.
+
+\bibitem{shazeer2017outrageously}
+N.~Shazeer, A.~Mirhoseini, K.~Maziarz, A.~Davis, Q.~Le, G.~Hinton, and J.~Dean.
+\newblock Outrageously large neural networks: The sparsely-gated mixture-of-experts layer.
+\newblock In \emph{ICLR}, 2017.
+
+\bibitem{sundararajan2017axiomatic}
+M.~Sundararajan, A.~Taly, and Q.~Yan.
+\newblock Axiomatic attribution for deep networks.
+\newblock In \emph{ICML}, 2017.
+
+\bibitem{valiant1984theory}
+L.~G.~Valiant.
+\newblock A theory of the learnable.
+\newblock \emph{Communications of the ACM}, 27(11):1134--1142, 1984.
+
+\bibitem{dwork2014algorithmic}
+C.~Dwork and A.~Roth.
+\newblock The algorithmic foundations of differential privacy.
+\newblock \emph{Foundations and Trends in Theoretical Computer Science}, 9(3--4):211--407, 2014.
+
+\bibitem{fedus2022switch}
+W.~Fedus, B.~Zoph, and N.~Shazeer.
+\newblock Switch {T}ransformers: Scaling to trillion parameter models with simple and efficient sparsity.
+\newblock \emph{JMLR}, 23(120):1--39, 2022.
+
+\bibitem{lepikhin2021gshard}
+D.~Lepikhin, H.~Lee, Y.~Xu, D.~Chen, O.~Firat, Y.~Huang, M.~Krikun, N.~Shazeer, and Z.~Chen.
+\newblock {GS}hard: Scaling giant models with conditional computation and automatic sharding.
+\newblock In \emph{ICLR}, 2021.
+
+\bibitem{jiang2024mixtral}
+A.~Q.~Jiang, A.~Sablayrolles, A.~Roux, A.~Mensch, et~al.
+\newblock Mixtral of experts.
+\newblock \emph{arXiv:2401.04088}, 2024.
+
+\bibitem{andreas2016neural}
+J.~Andreas, M.~Rohrbach, T.~Darrell, and D.~Klein.
+\newblock Neural module networks.
+\newblock In \emph{CVPR}, 2016.
+
+\bibitem{pfeiffer2023modular}
+J.~Pfeiffer, S.~Ruder, I.~Vuli\'{c}, and E.~Ponti.
+\newblock Modular deep learning.
+\newblock \emph{TMLR}, 2023.
+
+\bibitem{lewis2020retrieval}
+P.~Lewis, E.~Perez, A.~Piktus, F.~Petroni, V.~Karpukhin, N.~Goyal, H.~K\"{u}ttler, M.~Lewis, W.~Yih, T.~Rockt\"{a}schel, S.~Riedel, and D.~Kiela.
+\newblock Retrieval-augmented generation for knowledge-intensive {NLP} tasks.
+\newblock In \emph{NeurIPS}, 2020.
+
+\bibitem{bourtoule2021machine}
+L.~Bourtoule, V.~Chandrasekaran, C.~A. Choquette-Choo, H.~Jia, A.~Travers, B.~Zhang, D.~Lie, and N.~Papernot.
+\newblock Machine unlearning.
+\newblock In \emph{IEEE S\&P}, 2021.
+
+\bibitem{katz2017reluplex}
+G.~Katz, C.~Barrett, D.~L.~Dill, K.~Julian, and M.~J.~Kochenderfer.
+\newblock Reluplex: An efficient {SMT} solver for verifying deep neural networks.
+\newblock In \emph{CAV}, 2017.
+
+\bibitem{bricken2023monosemanticity}
+T.~Bricken, A.~Templeton, J.~Batson, B.~Chen, A.~Jermyn, et~al.
+\newblock Towards monosemanticity: Decomposing language models with dictionary learning.
+\newblock \emph{Transformer Circuits Thread, Anthropic}, 2023.
+
+\end{thebibliography}
+
+\end{document}
