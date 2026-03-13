@@ -1,4 +1,7 @@
 chat_backup/
 .project-state/
 .DS_Store
-.DS_Store
+*.aux
+*.log
+*.out
+*.synctex.gz
