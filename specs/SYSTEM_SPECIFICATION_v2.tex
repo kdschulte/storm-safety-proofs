@@ -72,8 +72,6 @@ It is a research programme statement: here are the questions, here is why we bel
 \label{sec:arch}
 % ============================================================
 
-The architecture follows the modular deep learning paradigm~\cite{pfeiffer2023modular}, in which independently trained modules compose within a shared representation space.
-
 \begin{definition}[Modular Compositional System]
 A modular compositional system $\mathcal{S}$ consists of:
 \begin{itemize}[nosep]
@@ -87,6 +85,8 @@ For input representation $\mathbf{x} \in \mathbb{R}^d$ at position $t$, let $(i_
 \mathbf{y}_t = \sum_{k=1}^{K} w_k \cdot m_{i_k}(\mathbf{x})
 \end{equation}
 \end{definition}
+
+\noindent This formalises the modular architecture pattern described in the recent survey by Pfeiffer et al.~\cite{pfeiffer2023modular}, with the additional constraints of independent training and permanent freezing.
 
 \subsection{Structural Constraints}
 
@@ -103,7 +103,7 @@ Four constraints distinguish this architecture from standard mixture-of-experts:
 \end{enumerate}
 
 \begin{remark}
-In standard MoE (Switch Transformer~\cite{fedus2022switch}, GShard~\cite{lepikhin2021gshard}, Mixtral~\cite{jiang2024mixtral}), experts share gradients during training, weights are mutable, the pool is fixed at training time, and knowledge is distributed across all experts. These design choices make the same formal questions intractable for the same reasons they are intractable in monolithic models.
+In standard MoE~\cite{shazeer2017outrageously} (Switch Transformer~\cite{fedus2022switch}, GShard~\cite{lepikhin2021gshard}, Mixtral~\cite{jiang2024mixtral}), experts share gradients during training, weights are mutable, the pool is fixed at training time, and knowledge is distributed across all experts. These design choices make the same formal questions intractable for the same reasons they are intractable in monolithic models.
 \end{remark}
 
 % ============================================================
@@ -120,7 +120,7 @@ We state six safety-relevant properties, describe the empirical evidence motivat
 For any output token $y_t$ produced by the system, there exists a decomposition of the output into per-module contributions with explicit weights, such that the contribution of each module $m_i$ is identifiable and bounded.
 \end{property}
 
-\noindent\textbf{Empirical evidence.} The composition rule (Equation~\ref{eq:composition}) provides attribution directly: the weight $w_k$ assigned to module $m_{i_k}$ at position $t$ quantifies its contribution. In our experiments with modules across multiple knowledge domains, lightweight domain-specific modules achieve discrimination ratios exceeding two orders of magnitude, earning high routing weight on their domain and near-zero weight on unrelated inputs. This structural attribution differs from post-hoc methods such as integrated gradients~\cite{sundararajan2017axiomatic} in that the decomposition is given by the architecture, not estimated after the fact.
+\noindent\textbf{Empirical evidence.} The composition rule (Equation~\ref{eq:composition}) provides attribution directly: the weight $w_k$ assigned to module $m_{i_k}$ at position $t$ quantifies its contribution. In our experiments with modules across multiple knowledge domains, lightweight domain-specific modules achieve discrimination ratios exceeding two orders of magnitude, earning high routing weight on their domain and near-zero weight on unrelated inputs.
 
 \begin{conjecture}[Meaningful Attribution]
 Under what conditions on the router $R$ and modules $\{m_i\}$ does the weight decomposition in Equation~\ref{eq:composition} constitute a \emph{meaningful} attribution, i.e., one where removing a module with weight $w$ from the composition changes the output by $\Theta(w)$?
@@ -135,7 +135,7 @@ Under what conditions on the router $R$ and modules $\{m_i\}$ does the weight de
 Removing module $m_j$ from the pool $\mathcal{M}$ eliminates all knowledge associated with $m_j$ from all future outputs of the system.
 \end{property}
 
-\noindent\textbf{Empirical evidence.} In our experiments, removing a domain-specific module eliminates that domain's content from outputs. A substantial fraction of routing weight is allocated to memory-type modules; removing a memory module causes the router to redistribute weight among remaining modules with no trace of the removed content. This contrasts with approximate unlearning methods~\cite{bourtoule2021machine} that offer statistical rather than structural guarantees.
+\noindent\textbf{Empirical evidence.} In our experiments, removing a domain-specific module eliminates that domain's content from outputs. A substantial fraction of routing weight is allocated to memory-type modules; removing a memory module causes the router to redistribute weight among remaining modules with no trace of the removed content.
 
 \begin{conjecture}[Information-Theoretic Forgetting]
 Let $D_j$ be the training data of module $m_j$. After removing $m_j$ from $\mathcal{M}$ and updating the router, is the mutual information $I(D_j; Y_t) = 0$ for all future outputs $Y_t$? Under what conditions on the shared backbone and remaining modules does this hold?
@@ -229,15 +229,15 @@ Full experimental data and sanitised datasets are available in the public reposi
 \label{sec:related}
 % ============================================================
 
-\textbf{Mixture-of-Experts.} The sparsely-gated mixture-of-experts architecture~\cite{shazeer2017outrageously} and its descendants, including Switch Transformer~\cite{fedus2022switch}, GShard~\cite{lepikhin2021gshard}, and Mixtral~\cite{jiang2024mixtral}, train experts jointly with shared gradients, producing entangled knowledge representations. Our independent training and permanent freezing constraints create a structurally different system.
+\textbf{Mixture-of-Experts.} The sparsely-gated MoE layer~\cite{shazeer2017outrageously} and its successors Switch Transformer~\cite{fedus2022switch}, GShard~\cite{lepikhin2021gshard}, and Mixtral~\cite{jiang2024mixtral} train experts jointly with shared gradients, producing entangled knowledge representations. Our independent training and permanent freezing constraints create a structurally different system.
 
-\textbf{Modular Networks.} Neural module networks~\cite{andreas2016neural} compose specialised modules for visual question answering, but modules are jointly trained and task-specific. More recently, Pfeiffer et al.~\cite{pfeiffer2023modular} survey the broader modular deep learning landscape. Our modules are domain-general frozen functions that compose in a shared vector space.
+\textbf{Modular Networks.} Neural module networks~\cite{andreas2016neural} compose specialised modules for visual question answering, but modules are jointly trained and task-specific. The broader landscape of modular deep learning is surveyed by Pfeiffer et al.~\cite{pfeiffer2023modular}. Our modules are domain-general frozen functions that compose in a shared representation space.
 
 \textbf{Retrieval-Augmented Generation.} RAG systems~\cite{lewis2020retrieval} compose a generator with retrieved documents, but the generator is monolithic and the ``composition'' is concatenation in input space, not convex combination in representation space.
 
 \textbf{Machine Unlearning.} The growing literature on machine unlearning~\cite{bourtoule2021machine} seeks to remove data influence from trained models. Our architecture may offer a structural solution: if knowledge is localised in a frozen module, ``unlearning'' is module removal.
 
-\textbf{Formal Verification of Neural Networks.} Existing work on formal verification of neural networks~\cite{katz2017reluplex} focuses on input-output properties of fixed networks (e.g., robustness bounds). Our questions concern compositional properties of modular systems, a different class of formal problem that involves reasoning about module selection and combination rather than individual network behaviour.
+\textbf{Formal Verification of Neural Networks.} Existing work on neural network verification~\cite{katz2017reluplex} focuses on input-output properties of fixed networks (e.g., robustness bounds). Our questions concern compositional properties of modular systems, a different class of formal problem.
 
 % ============================================================
 \section{Discussion}
@@ -271,6 +271,56 @@ D.~Amodei, C.~Olah, J.~Steinhardt, P.~Christiano, J.~Schulman, and D.~Man\'{e}.
 \newblock Concrete problems in {AI} safety.
 \newblock \emph{arXiv:1606.06565}, 2016.
 
+\bibitem{andreas2016neural}
+J.~Andreas, M.~Rohrbach, T.~Darrell, and D.~Klein.
+\newblock Neural module networks.
+\newblock In \emph{CVPR}, 2016.
+
+\bibitem{bourtoule2021machine}
+L.~Bourtoule, V.~Chandrasekaran, C.~A. Choquette-Choo, H.~Jia, A.~Travers, B.~Zhang, D.~Lie, and N.~Papernot.
+\newblock Machine unlearning.
+\newblock In \emph{IEEE S\&P}, 2021.
+
+\bibitem{bricken2023monosemanticity}
+T.~Bricken, A.~Templeton, J.~Batson, B.~Chen, A.~Jermyn, et~al.
+\newblock Towards monosemanticity: Decomposing language models with dictionary learning.
+\newblock \emph{Anthropic Research}, 2023.
+
+\bibitem{dwork2014algorithmic}
+C.~Dwork and A.~Roth.
+\newblock The algorithmic foundations of differential privacy.
+\newblock \emph{Foundations and Trends in Theoretical Computer Science}, 9(3--4):211--407, 2014.
+
+\bibitem{fedus2022switch}
+W.~Fedus, B.~Zoph, and N.~Shazeer.
+\newblock Switch {T}ransformers: Scaling to trillion parameter models with simple and efficient sparsity.
+\newblock \emph{JMLR}, 23(120):1--39, 2022.
+
+\bibitem{katz2017reluplex}
+G.~Katz, C.~Barrett, D.~L.~Dill, K.~Julian, and M.~J.~Kochenderfer.
+\newblock Reluplex: An efficient {SMT} solver for verifying deep neural networks.
+\newblock In \emph{CAV}, 2017.
+
+\bibitem{lepikhin2021gshard}
+D.~Lepikhin, H.~Lee, Y.~Xu, D.~Chen, O.~Firat, Y.~Huang, M.~Krikun, N.~Shazeer, and Z.~Chen.
+\newblock {GS}hard: Scaling giant models with conditional computation and automatic sharding.
+\newblock In \emph{ICLR}, 2021.
+
+\bibitem{jiang2024mixtral}
+A.~Q.~Jiang, A.~Sablayrolles, A.~Roux, A.~Mensch, et~al.
+\newblock Mixtral of experts.
+\newblock \emph{arXiv:2401.04088}, 2024.
+
+\bibitem{lewis2020retrieval}
+P.~Lewis, E.~Perez, A.~Piktus, F.~Petroni, V.~Karpukhin, N.~Goyal, H.~K\"{u}ttler, M.~Lewis, W.~Yih, T.~Rockt\"{a}schel, S.~Riedel, and D.~Kiela.
+\newblock Retrieval-augmented generation for knowledge-intensive {NLP} tasks.
+\newblock In \emph{NeurIPS}, 2020.
+
+\bibitem{pfeiffer2023modular}
+J.~Pfeiffer, S.~Ruder, I.~Vuli\'{c}, and E.~Ponti.
+\newblock Modular deep learning.
+\newblock \emph{TMLR}, 2023.
+
 \bibitem{shazeer2017outrageously}
 N.~Shazeer, A.~Mirhoseini, K.~Maziarz, A.~Davis, Q.~Le, G.~Hinton, and J.~Dean.
 \newblock Outrageously large neural networks: The sparsely-gated mixture-of-experts layer.
@@ -285,56 +335,6 @@ M.~Sundararajan, A.~Taly, and Q.~Yan.
 L.~G.~Valiant.
 \newblock A theory of the learnable.
 \newblock \emph{Communications of the ACM}, 27(11):1134--1142, 1984.
-
-\bibitem{dwork2014algorithmic}
-C.~Dwork and A.~Roth.
-\newblock The algorithmic foundations of differential privacy.
-\newblock \emph{Foundations and Trends in Theoretical Computer Science}, 9(3--4):211--407, 2014.
-
-\bibitem{fedus2022switch}
-W.~Fedus, B.~Zoph, and N.~Shazeer.
-\newblock Switch {T}ransformers: Scaling to trillion parameter models with simple and efficient sparsity.
-\newblock \emph{JMLR}, 23(120):1--39, 2022.
-
-\bibitem{lepikhin2021gshard}
-D.~Lepikhin, H.~Lee, Y.~Xu, D.~Chen, O.~Firat, Y.~Huang, M.~Krikun, N.~Shazeer, and Z.~Chen.
-\newblock {GS}hard: Scaling giant models with conditional computation and automatic sharding.
-\newblock In \emph{ICLR}, 2021.
-
-\bibitem{jiang2024mixtral}
-A.~Q.~Jiang, A.~Sablayrolles, A.~Roux, A.~Mensch, et~al.
-\newblock Mixtral of experts.
-\newblock \emph{arXiv:2401.04088}, 2024.
-
-\bibitem{andreas2016neural}
-J.~Andreas, M.~Rohrbach, T.~Darrell, and D.~Klein.
-\newblock Neural module networks.
-\newblock In \emph{CVPR}, 2016.
-
-\bibitem{pfeiffer2023modular}
-J.~Pfeiffer, S.~Ruder, I.~Vuli\'{c}, and E.~Ponti.
-\newblock Modular deep learning.
-\newblock \emph{TMLR}, 2023.
-
-\bibitem{lewis2020retrieval}
-P.~Lewis, E.~Perez, A.~Piktus, F.~Petroni, V.~Karpukhin, N.~Goyal, H.~K\"{u}ttler, M.~Lewis, W.~Yih, T.~Rockt\"{a}schel, S.~Riedel, and D.~Kiela.
-\newblock Retrieval-augmented generation for knowledge-intensive {NLP} tasks.
-\newblock In \emph{NeurIPS}, 2020.
-
-\bibitem{bourtoule2021machine}
-L.~Bourtoule, V.~Chandrasekaran, C.~A. Choquette-Choo, H.~Jia, A.~Travers, B.~Zhang, D.~Lie, and N.~Papernot.
-\newblock Machine unlearning.
-\newblock In \emph{IEEE S\&P}, 2021.
-
-\bibitem{katz2017reluplex}
-G.~Katz, C.~Barrett, D.~L.~Dill, K.~Julian, and M.~J.~Kochenderfer.
-\newblock Reluplex: An efficient {SMT} solver for verifying deep neural networks.
-\newblock In \emph{CAV}, 2017.
-
-\bibitem{bricken2023monosemanticity}
-T.~Bricken, A.~Templeton, J.~Batson, B.~Chen, A.~Jermyn, et~al.
-\newblock Towards monosemanticity: Decomposing language models with dictionary learning.
-\newblock \emph{Transformer Circuits Thread, Anthropic}, 2023.
 
 \end{thebibliography}
 
