@@ -54,7 +54,7 @@ literature/   Relevant prior work
 
 ## Contact
 
-Kim Schulte — KDSZ Investments Ltd — kim@kdszinvestments.com
+Kim Schulte — MODULITH RESEARCH CIC research@modulith.ai
 
 ## Licence
 
