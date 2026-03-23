@@ -1,5 +1,7 @@
 # Compositional AI Systems with Verifiable Safety Properties
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.19196515.svg)](https://doi.org/10.5281/zenodo.19196515)
+
 Mathematical framework for proving that modular compositional AI architectures provide verifiable safety guarantees that monolithic systems cannot.
 
 ## The Problem

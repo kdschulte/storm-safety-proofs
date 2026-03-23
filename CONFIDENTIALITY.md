@@ -1,7 +1,7 @@
 # CONFIDENTIALITY NOTICE
 
 This repository contains confidential research material owned by
-KDSZ Investments Ltd.
+Modulith Research CIC.
 
 ## What You May Share
 - Mathematical proofs (after PI review and approval)

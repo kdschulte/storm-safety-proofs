@@ -1,5 +1,5 @@
 # Compositional AI Systems with Verifiable Safety Properties
-## Research Programme — KDSZ Investments Ltd / ARIA Math for Safe AI
+## Research Programme — Modulith Research CIC
 
 ### Mission
 Develop the mathematical framework proving that modular compositional AI architectures
@@ -30,4 +30,4 @@ literature/      — Relevant papers and references
 ```
 
 ### Contact
-Principal Investigator: Kim Schulte (kim@kdszinvestments.com)
+Principal Investigator: Kim Schulte-Zurhausen (research@modulith.ai)
