@@ -1,0 +1,116 @@
+\documentclass[conference]{IEEEtran}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath,amssymb}
+\usepackage{hyperref}
+\usepackage{cite}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue!70!black,
+  citecolor=blue!70!black,
+  urlcolor=blue!70!black
+}
+
+\title{Open Problems in Formal Verification of\\Modular Compositional AI Systems}
+
+\author{\IEEEauthorblockN{Kim Daniel Schulte-Zurhausen}
+\IEEEauthorblockA{Modulith Research CIC, London, UK\\
+research@modulith.ai}}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+We describe an AI architecture in which independently trained expert modules are permanently frozen and dynamically composed through sparse top-K routing in a shared representation space. This architecture differs structurally from standard mixture-of-experts: modules are trained independently, permanently frozen, dynamically added or removed, and composed via an explicit sparse graph at each inference step. We present empirical evidence from 346 experiments suggesting that these structural constraints may enable formal reasoning about safety-relevant properties---attribution, guaranteed forgetting, non-degradation, memory isolation, bounded compute, and compositional monotonicity---that are intractable in jointly-trained architectures. We pose each property as an open mathematical question, inviting contributions from the formal methods, learning theory, and information theory communities.\footnote{v2: Corrected composition equation notation to explicit selection-set formulation, bounded compute specification, experiment count (346), and PAC-Bayes citation.}
+\end{abstract}
+
+\begin{IEEEkeywords}
+modular AI, compositional systems, formal verification, AI safety, sparse routing, machine unlearning
+\end{IEEEkeywords}
+
+\section{Introduction}
+
+The safety verification of neural networks is a central challenge in AI safety research~\cite{amodei2016concrete}. For monolithic architectures, including transformers, large language models, and jointly-trained mixture-of-experts systems~\cite{fedus2022switch,shazeer2017outrageously}, formal reasoning about knowledge attribution~\cite{sundararajan2017axiomatic}, guaranteed forgetting~\cite{bourtoule2021machine}, and compositional stability remains intractable. The fundamental difficulty is that knowledge is distributed across entangled parameters~\cite{bricken2023monosemanticity}, making it impossible to localise influence, bound contributions, or guarantee removal of specific knowledge.
+
+We study an architecture with structural constraints designed to make such reasoning tractable: a pool of independently trained, frozen expert modules composed at inference time through sparse top-K routing~\cite{shazeer2017outrageously} in a shared representation space. This paper poses six safety-relevant properties as open mathematical questions motivated by empirical observations from 346 controlled experiments. It is a research programme statement, not a theoretical paper claiming proofs: here are the questions, here is why we believe they are tractable, and here is the evidence that the structural constraints produce the expected mathematical behaviour in practice.
+
+\section{Architecture}
+
+\textbf{Definition 1} (Modular Compositional System): A modular compositional system $\mathcal{S}$ consists of: (1) a \textbf{module pool} $\mathcal{M} = \{m_1, \ldots, m_N\}$ where each $m_i : \mathbb{R}^d \to \mathbb{R}^d$ is a frozen function in a shared representation space; (2) a \textbf{router} $R$ that, for each input, selects a subset $S(\mathbf{x}) \subset \{1,\ldots,N\}$ with $|S| = K \ll N$ and assigns non-negative weights $\{w_n(\mathbf{x})\}_{n \in S}$ with $\sum_{n \in S} w_n = 1$; and (3) a \textbf{shared backbone} providing the representation space. For input $\mathbf{x} \in \mathbb{R}^d$ at position $t$, let $S_t(\mathbf{x}) \subset \{1,\ldots,N\}$ with $|S_t| = K$ be the selected subset. The composed output is:
+\begin{equation}
+\label{eq:composition}
+\mathbf{y}_t = \sum_{n \in S_t(\mathbf{x})} w_n(\mathbf{x}) \cdot m_n(\mathbf{x}), \quad |S_t| = K \ll N
+\end{equation}
+
+Four constraints distinguish this from standard MoE~\cite{fedus2022switch,pfeiffer2023modular,shazeer2017outrageously}: (1) \emph{independent training}---no shared gradients; (2) \emph{permanent freezing}---$\nabla_{\theta_i} = 0$ after training; (3) \emph{dynamic pool}---modules added or removed without retraining others; (4) \emph{explicit composition graph}---each inference step induces a sparse bipartite graph recording per-module contributions. These are not merely architectural differences: independent training is the structural basis for guaranteed forgetting, permanent freezing makes attribution meaningful rather than nominal, and dynamic pool membership makes non-degradation a tractable question. None of these properties can be stated for jointly trained MoE where expert representations are entangled through shared gradient updates.
+
+\textbf{Computational cost.} The router evaluates affinities for all $N$ modules in $O(N)$ (or $O(N \log K)$ for top-$K$ selection via a heap), while the composition step invokes exactly $K$ module forward passes. Total inference cost is $O(N \log K + K \cdot C_{\text{mod}})$, where $C_{\text{mod}}$ is the cost of a single module forward pass. In practice, $K$ is small (4--8) and $C_{\text{mod}} \gg N$, so effective cost is governed by $K$. At larger pool sizes, approximate nearest-neighbour methods can reduce routing cost to sub-linear in $N$.
+
+\section{Safety Conjectures}
+
+We pose six properties as open mathematical questions. Each is motivated by empirical observations but remains formally unproven.
+
+\emph{Property 1 (Attribution):} The weight decomposition in~(\ref{eq:composition}) constitutes a meaningful attribution: removing a module with weight $w_n$ changes the output by $\Theta(w_n)$. Empirically, domain-specific modules achieve discrimination ratios exceeding two orders of magnitude. Standard MoE gating weights do not constitute meaningful attribution because jointly trained experts develop correlated representations; in the frozen-module architecture, the convex decomposition is over genuinely independent terms.
+
+\emph{Property 2 (Guaranteed Forgetting):} Removing module $m_j$ from the pool and retraining the router eliminates knowledge uniquely attributable to $m_j$ from subsequent outputs. The forgetting guarantee applies to knowledge in frozen modules; the shared backbone contains no domain-specific knowledge (empirically, the backbone alone produces degenerate output). We conjecture $I(D_j; Y_t) \to 0$ where $D_j$ is $m_j$'s training data. Independent training ensures no other module encodes information about $D_j$; the open questions are the router's residual information and the backbone's representational capacity.
+
+\emph{Property 3 (Non-Degradation):} Adding module $m_{N+1}$ and retraining only the router yields expected loss $L_{N+1} \leq L_N + \epsilon$ with high probability. Since existing modules are frozen, this reduces to the sample complexity of learning a routing policy over $N{+}1$ versus $N$ options. PAC-Bayes bounds~\cite{mcallester1999pac} or Rademacher complexity arguments for the router class may apply.
+
+\emph{Property 4 (Memory Isolation):} For $K \ll N$, a user-specific module $m_j$ has negligible influence on outputs for other users: $w_j(\mathbf{x}) \approx 0$ for unrelated inputs. The sparse routing mechanism limits any single module's contribution. This may connect to $(\epsilon, \delta)$-differential privacy~\cite{dwork2014algorithmic} of the routing mechanism.
+
+\emph{Property 5 (Bounded Compute):} Module execution cost is $O(K)$ per position. Router selection cost is $O(N)$. Total cost $O(N + K \cdot C_{\text{mod}})$ is dominated by $K$ module executions when $C_{\text{mod}} \gg N$. This ensures scaling the knowledge pool does not proportionally increase inference cost.
+
+\emph{Property 6 (Compositional Monotonicity):} Adding a domain module $m_j$ improves expected cross-entropy loss on its domain without degrading others. Leave-one-out ablation confirms all domain groups contribute positively. Empirically, we observe \emph{super-linear} composition: a composition threshold at $K{=}6$ yields a sharp 30\% perplexity reduction versus $K{=}2$ or $K{=}4$. Monotonicity as stated is pairwise; a stronger transitivity result would require bounds on interaction between simultaneously added modules.
+
+\section{Empirical Motivation}
+
+346 controlled experiments on consumer hardware motivate the formal programme. Key observations: (1) composed perplexity is approximately half that of any individual module on mixed data; (2) a mathematics-domain specialist trained on commodity hardware outperforms GPT-2 Small on its evaluation set; (3) the router autonomously discovers cross-domain strategies, selecting non-domain modules to assist domain-specific tasks; (4) a K-plateau effect where $K{=}2$ and $K{=}4$ yield nearly identical performance (PPL 33.19 vs 33.07), but $K{=}6$ drops sharply to 23.42, suggesting a minimum budget for genuine cross-domain composition. In our system ($N{=}44$, $K{=}6$, 15 domains), attribution correlation exceeds $r > 0.9$, forgetting residual is ${<}1\%$, and non-degradation holds within ${<}2\%$ across three expansion orderings. Full experimental data are available in the public repository~\cite{schulte2026zenodo}.
+
+\section{Discussion}
+
+These conjectures are posed as open questions. A complete formal treatment must address the shared backbone (a potential source of entanglement) and the router (whose behaviour under distribution shift requires separate analysis). We invite collaboration from researchers in formal verification~\cite{katz2017reluplex}, PAC learning theory~\cite{valiant1984theory}, information theory, and AI safety. The architecture is protected by a filed UK patent (Application No.\ 2606268.7); the conjectures are offered as open problems.
+
+\begin{thebibliography}{12}
+
+\bibitem{amodei2016concrete}
+D.~Amodei \emph{et~al.}, ``Concrete problems in {AI} safety,'' \emph{arXiv:1606.06565}, 2016.
+
+\bibitem{bourtoule2021machine}
+L.~Bourtoule \emph{et~al.}, ``Machine unlearning,'' in \emph{IEEE S\&P}, 2021.
+
+\bibitem{bricken2023monosemanticity}
+T.~Bricken \emph{et~al.}, ``Towards monosemanticity,'' \emph{Anthropic Research}, 2023.
+
+\bibitem{dwork2014algorithmic}
+C.~Dwork and A.~Roth, ``The algorithmic foundations of differential privacy,'' \emph{Found.\ Trends TCS}, 9(3--4):211--407, 2014.
+
+\bibitem{fedus2022switch}
+W.~Fedus \emph{et~al.}, ``Switch {T}ransformers,'' \emph{JMLR}, 23(120):1--39, 2022.
+
+\bibitem{katz2017reluplex}
+G.~Katz \emph{et~al.}, ``Reluplex,'' in \emph{CAV}, 2017.
+
+\bibitem{mcallester1999pac}
+D.~A.~McAllester, ``{PAC}-{B}ayesian model averaging,'' in \emph{Proc.\ COLT}, pp.~164--170, 1999.
+
+\bibitem{pfeiffer2023modular}
+J.~Pfeiffer \emph{et~al.}, ``Modular deep learning,'' \emph{TMLR}, 2023.
+
+\bibitem{schulte2026zenodo}
+K.~Schulte-Zurhausen, ``Formal safety conjectures for modular compositional {AI} systems,'' Zenodo, 2026. DOI: 10.5281/zenodo.15196515.
+
+\bibitem{shazeer2017outrageously}
+N.~Shazeer \emph{et~al.}, ``Outrageously large neural networks,'' in \emph{ICLR}, 2017.
+
+\bibitem{sundararajan2017axiomatic}
+M.~Sundararajan \emph{et~al.}, ``Axiomatic attribution for deep networks,'' in \emph{ICML}, 2017.
+
+\bibitem{valiant1984theory}
+L.~G.~Valiant, ``A theory of the learnable,'' \emph{Commun.\ ACM}, 27(11):1134--1142, 1984.
+
+\end{thebibliography}
+
+\end{document}
