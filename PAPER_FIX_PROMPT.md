@@ -1,136 +1,143 @@
 KDSZ Investments Ltd — Proprietary work | 2026-03-26
 
-# Recreate AIxSE Position Paper with Audit Fixes
+# Recreate AIxSE Position Paper .tex from PDF with All Audit Fixes
 
 ## CONTEXT
-The original AIxSE position paper (IEEE 2-page format) has the same bugs found in the
-Zenodo spec audit. The corrected spec is at specs/SYSTEM_SPECIFICATION_v3.tex — use
-it as the SOURCE OF TRUTH for all equations and definitions.
-
-The original paper PDF is provided for structure/layout reference only. Do NOT copy
-equations from it — they have known errors.
+The original AIxSE position paper exists ONLY as a PDF (no .tex source survived).
+The PDF is the layout/content reference.
+The corrected Zenodo spec at specs/SYSTEM_SPECIFICATION_v3.tex is the SOURCE OF TRUTH
+for all equations, property definitions, and citations.
 
 ## TASK
-Create papers/AIxSE_Position_Paper_v2.tex — a corrected IEEE 2-page position paper
-that incorporates ALL audit fixes from the spec v3.
+Recreate papers/AIxSE_Position_Paper_v2.tex from scratch:
+1. Match the structure and content of the original PDF
+2. Apply ALL corrections from specs/SYSTEM_SPECIFICATION_v3.tex
+3. IEEE 2-column conference format, 2 pages maximum
 
-## STEP 1: Read the corrected spec
-
-```bash
-cat specs/SYSTEM_SPECIFICATION_v3.tex
-```
-
-This has the corrected equations, MoE differentiation, stated assumptions, fixed citations.
-
-## STEP 2: Create the corrected position paper
-
-Create papers/AIxSE_Position_Paper_v2.tex with these corrections vs the original:
-
-### Fix 1: Composition equation (Equation 1)
-WRONG (original):
-```latex
-y_t = \sum_{k=1}^{K} w_k \cdot m_{i_k}(\mathbf{x})
-```
-
-CORRECT (from spec v3):
-```latex
-\mathbf{y}_t = \sum_{n \in S_t(\mathbf{x})} w_n(\mathbf{x}) \cdot m_n(\mathbf{x}), \quad |S_t| = K \ll N
-```
-
-The Definition must include the selection set S(x) ⊂ {1,...,N} with |S| = K ≪ N
-and weights w_n(x) ≥ 0 summing to 1 over S.
-
-### Fix 2: Computational cost section
-The original is actually decent here but align with spec v3:
-- Router: O(N) or O(N log K) for top-K selection
-- Module execution: O(K) — only K modules run
-- Total: O(N log K + K·C_mod), dominated by K when C_mod >> N
-- Keep the mention of approximate nearest-neighbour for large N
-
-### Fix 3: Experiment count
-Replace all instances of "300" or "over 300" with "346"
-
-### Fix 4: PAC-Bayes citation
-Reference [11] in the original is Valiant 1984 — that's PAC learning, NOT PAC-Bayes.
-In Property 3, the text says "PAC-Bayes bounds [11]" — this is WRONG.
-
-Fix: Add McAllester 1999 as a new reference and cite it for PAC-Bayes:
-```bibtex
-D. A. McAllester, "PAC-Bayesian model averaging," in Proc. COLT, pp. 164–170, 1999.
-```
-
-Keep Valiant 1984 ONLY if used elsewhere for PAC learning (not PAC-Bayes).
-
-### Fix 5: Notation consistency
-Use w_n and m_n throughout (not w_k and m_{i_k}).
-Use S_t(x) for the selection set.
-Match spec v3 notation exactly.
-
-### Fix 6: Property statements
-Align ALL 6 property statements with spec v3:
-- Attribution: w_n notation, add MoE gating comparison in proof strategy
-- Guaranteed Forgetting: scope to modular knowledge, add backbone caveat
-- Non-Degradation: "retraining only the router" explicit
-- Memory Isolation: add K ≪ N requirement to property statement
-- Bounded Compute: split router O(N) from module O(K) clearly
-- Compositional Monotonicity: "expected cross-entropy loss", add transitivity remark
-
-### Fix 7: Add MoE differentiation
-After the 4 structural constraints, add a sentence or brief remark (space permitting
-in 2 pages) distinguishing from MoE. Pull from spec v3 lines 105-109.
-
-### Fix 8: Revision note
-Add a footnote on page 1:
-"v2: Corrected composition equation notation (selection-set formulation),
-bounded compute specification, experiment count, and PAC-Bayes citation."
-
-## STEP 3: IEEE format requirements
-
-- 2-column IEEE conference format
-- Maximum 2 pages (position paper)
-- Use IEEEtran document class
-- Single-blind (author name visible)
-- All references must fit in 2 pages
-
-Check that the corrected paper still fits in 2 pages. If it overflows, trim
-the Discussion section or the empirical motivation — the equations and properties
-are more important than prose.
-
-## STEP 4: Compile and verify
+## STEP 1: Read the corrected spec (source of truth for equations)
 
 ```bash
-cd papers
+cat /Users/kim/code/storm-safety-proofs/specs/SYSTEM_SPECIFICATION_v3.tex
+```
+
+## STEP 2: Read the original PDF for structure reference
+
+The PDF is at the path provided. Extract the structure:
+- Title: "Open Problems in Formal Verification of Modular Compositional AI Systems"
+- Author: Kim Daniel Schulte-Zurhausen, Modulith Research CIC, London, UK
+- Email: research@modulith.ai
+- Sections: I. Introduction, II. Architecture, III. Safety Conjectures, IV. Empirical Motivation, V. Discussion
+- 6 properties, 11 references
+
+## STEP 3: Create papers/AIxSE_Position_Paper_v2.tex
+
+Use IEEEtran document class. Recreate the full paper content from the PDF BUT
+apply these corrections:
+
+### Correction 1: Composition equation
+PDF has:
+  yt = Σ(k=1 to K) wk · m_ik(x)
+
+REPLACE with (from spec v3):
+  yt = Σ(n ∈ S_t(x)) w_n(x) · m_n(x),  |S_t| = K ≪ N
+
+The Definition must include:
+- Router selects subset S(x) ⊂ {1,...,N} with |S| = K ≪ N
+- Non-negative weights w_n(x) summing to 1 over S
+- Explicit K ≪ N in the equation
+
+### Correction 2: All w_k / m_{i_k} → w_n / m_n
+Every reference to routing weights and modules must use consistent
+w_n and m_n notation throughout the paper. No w_k, no m_{i_k}.
+
+### Correction 3: Experiment count
+PDF says "over 300" — change ALL instances to "346"
+
+### Correction 4: PAC-Bayes citation
+PDF reference [11] is Valiant 1984 and is cited for "PAC-Bayes bounds" in Property 3.
+This is WRONG. Valiant 1984 = PAC learning, NOT PAC-Bayes.
+
+Add new reference:
+  D. A. McAllester, "PAC-Bayesian model averaging," in Proc. COLT, pp. 164-170, 1999.
+
+Cite McAllester for PAC-Bayes. Keep Valiant ONLY for PAC learning if used elsewhere.
+
+### Correction 5: Bounded Compute (Property 5)
+PDF says "O(K) regardless of N" — this is imprecise.
+From spec v3, use the precise formulation:
+- Module execution: O(K)
+- Router selection: O(N) or O(N log K)
+- Total: O(N log K + K·C_mod)
+- Dominated by K when C_mod >> N
+
+The paper already has a decent Computational Cost paragraph — align it with spec v3.
+
+### Correction 6: Property statements
+Align all 6 properties with spec v3:
+- Property 1 (Attribution): use w_n notation, mention MoE gating comparison
+- Property 2 (Forgetting): scope to modular knowledge, backbone caveat
+- Property 3 (Non-Degradation): "retraining only the router" explicit
+- Property 4 (Memory Isolation): add K ≪ N requirement
+- Property 5 (Bounded Compute): split router O(N) from module O(K)
+- Property 6 (Monotonicity): "expected cross-entropy loss", transitivity remark
+
+### Correction 7: MoE differentiation
+After the 4 structural constraints in Section II, add a brief remark
+(1-2 sentences, space permitting) distinguishing from MoE.
+Pull from spec v3 lines 105-109.
+
+### Correction 8: Revision footnote
+Add footnote on page 1:
+"v2: Corrected composition equation notation to explicit selection-set
+formulation, bounded compute specification, experiment count (346),
+and PAC-Bayes citation."
+
+## STEP 4: Compile
+
+```bash
+cd /Users/kim/code/storm-safety-proofs/papers
 pdflatex AIxSE_Position_Paper_v2.tex
 pdflatex AIxSE_Position_Paper_v2.tex
 ```
 
-Verify:
-1. PDF compiles without errors
-2. Equations render correctly
-3. Paper fits in 2 pages
-4. All references resolve
-5. Composition equation uses S_t(x) notation (NOT k=1 to K)
-6. PAC-Bayes cites McAllester 1999 (NOT Valiant 1984)
-7. Experiment count says 346
+## STEP 5: Verify (CRITICAL — check ALL of these)
 
-## STEP 5: Keep the original
+```bash
+# Must use selection-set notation, NOT k=1 to K
+grep -c "S_t" AIxSE_Position_Paper_v2.tex && echo "Selection set: ✓"
+grep -c "k=1" AIxSE_Position_Paper_v2.tex && echo "FAIL: old MoE notation still present!"
 
-Do NOT modify or delete the original paper if it exists anywhere in the repo.
-The v2 is a NEW file: papers/AIxSE_Position_Paper_v2.tex
+# Must cite McAllester for PAC-Bayes
+grep "McAllester\|mcallester" AIxSE_Position_Paper_v2.tex && echo "McAllester: ✓"
+
+# Must say 346 not 300
+grep "346" AIxSE_Position_Paper_v2.tex && echo "Experiment count: ✓"
+grep "300" AIxSE_Position_Paper_v2.tex && echo "WARNING: old count still present"
+
+# Must use w_n not w_k throughout
+grep "w_k" AIxSE_Position_Paper_v2.tex && echo "FAIL: old w_k notation!"
+grep "w_n" AIxSE_Position_Paper_v2.tex && echo "w_n notation: ✓"
+
+# Check page count
+echo "Check PDF is exactly 2 pages"
+```
+
+If paper exceeds 2 pages: trim Discussion section or Empirical Motivation prose.
+Equations and property statements are more important than prose.
 
 ## STEP 6: Commit
 
 ```bash
-cd ..
+cd /Users/kim/code/storm-safety-proofs
 git add papers/AIxSE_Position_Paper_v2.tex papers/AIxSE_Position_Paper_v2.pdf
-git commit -m "AIxSE v2: Apply all audit fixes from spec v3. Fixed composition equation (was MoE notation), PAC-Bayes citation, experiment count 346, bounded compute O(N)+O(K), notation consistency, MoE differentiation."
-git push
+git commit -m "Recreate AIxSE paper .tex with all audit fixes: selection-set equation, McAllester citation, 346 experiments, bounded compute split, MoE differentiation"
 ```
 
 ## HARD CONSTRAINTS
-1. Equation (1) MUST use selection-set notation from spec v3. If it says k=1 to K, REJECT.
-2. PAC-Bayes MUST cite McAllester 1999, NOT Valiant 1984.
+1. Equation MUST use S_t(x) selection-set notation — if k=1 to K appears, REJECT
+2. PAC-Bayes cites McAllester 1999 — NOT Valiant 1984
 3. PUBLIC LANGUAGE ONLY — never "STORM", "IFB", "byte bridge", "neural database"
-4. Must fit in 2 pages IEEE format
-5. All notation must match spec v3 exactly (w_n, m_n, S_t, N, K)
-6. Experiment count: 346
+4. Must fit 2 pages IEEE format — trim prose if needed, never trim equations
+5. All notation matches spec v3 (w_n, m_n, S_t, N, K)
+6. 346 experiments, not 300
+7. Do NOT modify any other files — only create new files in papers/
