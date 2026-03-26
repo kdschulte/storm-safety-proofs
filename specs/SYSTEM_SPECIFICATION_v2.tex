@@ -76,13 +76,13 @@ It is a research programme statement: here are the questions, here is why we bel
 A modular compositional system $\mathcal{S}$ consists of:
 \begin{itemize}[nosep]
   \item A \textbf{module pool} $\mathcal{M} = \{m_1, m_2, \ldots, m_N\}$ where each $m_i : \mathbb{R}^d \to \mathbb{R}^d$ is a frozen function mapping from and to a shared representation space of dimension $d$.
-  \item A \textbf{router} $R : \mathbb{R}^d \to \Delta^K_N$ that selects $K$ modules per input position with explicit non-negative weights summing to 1.
+  \item A \textbf{router} $R$ that, for each input, selects a subset $S(\mathbf{x}) \subset \{1,\ldots,N\}$ with $|S| = K \ll N$ and assigns non-negative weights $\{w_n(\mathbf{x})\}_{n \in S}$ with $\sum_{n \in S} w_n = 1$.
   \item A \textbf{shared backbone} providing the representation space and any shared computation (e.g., attention, embedding).
 \end{itemize}
-For input representation $\mathbf{x} \in \mathbb{R}^d$ at position $t$, let $(i_1, w_1), \ldots, (i_K, w_K) = R(\mathbf{x})$ with $\sum_{k=1}^{K} w_k = 1$ and $w_k \geq 0$. The composed output is:
+For input representation $\mathbf{x} \in \mathbb{R}^d$ at position $t$, let $S_t(\mathbf{x}) \subset \{1,\ldots,N\}$ with $|S_t| = K$ be the subset selected by $R$, and let $w_n(\mathbf{x}) \geq 0$ for $n \in S_t$ with $\sum_{n \in S_t} w_n = 1$. The composed output is:
 \begin{equation}
 \label{eq:composition}
-\mathbf{y}_t = \sum_{k=1}^{K} w_k \cdot m_{i_k}(\mathbf{x})
+\mathbf{y}_t = \sum_{n \in S_t(\mathbf{x})} w_n(\mathbf{x}) \cdot m_n(\mathbf{x}), \quad |S_t| = K \ll N
 \end{equation}
 \end{definition}
 
@@ -106,6 +106,8 @@ Four constraints distinguish this architecture from standard mixture-of-experts:
 In standard MoE~\cite{shazeer2017outrageously} (Switch Transformer~\cite{fedus2022switch}, GShard~\cite{lepikhin2021gshard}, Mixtral~\cite{jiang2024mixtral}), experts share gradients during training, weights are mutable, the pool is fixed at training time, and knowledge is distributed across all experts. These design choices make the same formal questions intractable for the same reasons they are intractable in monolithic models.
 \end{remark}
 
+\noindent The distinction is not merely architectural but has direct consequences for formal reasoning. Because modules are independently trained, no module's parameters encode information about another module's training data---this is the structural basis for guaranteed forgetting. Because modules are permanently frozen, the composition equation (Equation~\ref{eq:composition}) is a convex combination of fixed, independent functions---this is what makes attribution meaningful rather than nominal. Because the pool is dynamic, modules can be added or removed without retraining existing modules---this is what makes non-degradation and compositional monotonicity tractable questions. None of these formal properties can be stated, let alone proven, for jointly trained MoE systems where expert representations are entangled through shared gradient updates.
+
 % ============================================================
 \section{Safety Properties and Open Problems}
 \label{sec:properties}
@@ -120,13 +122,13 @@ We state six safety-relevant properties, describe the empirical evidence motivat
 For any output token $y_t$ produced by the system, there exists a decomposition of the output into per-module contributions with explicit weights, such that the contribution of each module $m_i$ is identifiable and bounded.
 \end{property}
 
-\noindent\textbf{Empirical evidence.} The composition rule (Equation~\ref{eq:composition}) provides attribution directly: the weight $w_k$ assigned to module $m_{i_k}$ at position $t$ quantifies its contribution. In our experiments with modules across multiple knowledge domains, lightweight domain-specific modules achieve discrimination ratios exceeding two orders of magnitude, earning high routing weight on their domain and near-zero weight on unrelated inputs.
+\noindent\textbf{Empirical evidence.} The composition rule (Equation~\ref{eq:composition}) provides attribution directly: the weight $w_n$ assigned to each selected module $m_n$ at position $t$ quantifies its contribution. In our experiments with modules across multiple knowledge domains, lightweight domain-specific modules achieve discrimination ratios exceeding two orders of magnitude, earning high routing weight on their domain and near-zero weight on unrelated inputs.
 
 \begin{conjecture}[Meaningful Attribution]
 Under what conditions on the router $R$ and modules $\{m_i\}$ does the weight decomposition in Equation~\ref{eq:composition} constitute a \emph{meaningful} attribution, i.e., one where removing a module with weight $w$ from the composition changes the output by $\Theta(w)$?
 \end{conjecture}
 
-\noindent\textbf{Proof strategy.} The convex combination structure provides a natural starting point. The key question is whether the modules are sufficiently ``spread'' in the representation space that weight directly corresponds to influence. This may connect to the theory of convex decompositions and basis pursuit.
+\noindent\textbf{Proof strategy.} The convex combination structure provides a natural starting point. The key question is whether the modules are sufficiently ``spread'' in the representation space that weight directly corresponds to influence. This may connect to the theory of convex decompositions and basis pursuit. Note that standard MoE systems also have gating weights, but those weights do not constitute meaningful attribution because jointly trained experts develop correlated, entangled representations---removing an expert changes the behaviour of the remaining experts through shared gradient history. In the frozen-module architecture, each module is an independent fixed function, so the convex decomposition is over genuinely independent terms.
 
 \subsection{Guaranteed Forgetting}
 \label{sec:forgetting}
@@ -138,10 +140,10 @@ Removing module $m_j$ from the pool $\mathcal{M}$ eliminates all knowledge assoc
 \noindent\textbf{Empirical evidence.} In our experiments, removing a domain-specific module eliminates that domain's content from outputs. A substantial fraction of routing weight is allocated to memory-type modules; removing a memory module causes the router to redistribute weight among remaining modules with no trace of the removed content.
 
 \begin{conjecture}[Information-Theoretic Forgetting]
-Let $D_j$ be the training data of module $m_j$. After removing $m_j$ from $\mathcal{M}$ and updating the router, is the mutual information $I(D_j; Y_t) = 0$ for all future outputs $Y_t$? Under what conditions on the shared backbone and remaining modules does this hold?
+Let $D_j$ be the training data of module $m_j$. After removing $m_j$ from $\mathcal{M}$ and retraining the router on the reduced pool, is the mutual information $I(D_j; Y_t) = 0$ for all future outputs $Y_t$? Under what conditions on the shared backbone and remaining modules does this hold?
 \end{conjecture}
 
-\noindent\textbf{Proof strategy.} The permanent freezing constraint is key: since no other module's weights were influenced by $D_j$ during training (independent training), and no other module's weights changed after $m_j$ was added (frozen), any information about $D_j$ in the system is localised to $m_j$ itself and the router's learned preferences. The open question is the router's residual information about $D_j$.
+\noindent\textbf{Proof strategy.} The permanent freezing constraint is key: since no other module's weights were influenced by $D_j$ during training (independent training), and no other module's weights changed after $m_j$ was added (frozen), any information about $D_j$ in the system is localised to $m_j$ itself and the router's learned preferences. This is a \emph{structural guarantee} that standard MoE cannot provide: in jointly trained systems, knowledge from any training example may be distributed across all experts and the shared backbone, making complete removal intractable~\cite{bourtoule2021machine}. The open questions are: (1) the router's residual information about $D_j$ after retraining, and (2) whether the shared backbone (which is not modular) leaks information about $D_j$ if the backbone was exposed to related data.
 
 \subsection{Non-Degradation}
 \label{sec:nondeg}
@@ -162,7 +164,7 @@ Given a pool $\mathcal{M}$ of $N$ frozen modules with router $R$ achieving expec
 \label{sec:isolation}
 
 \begin{property}[Memory Isolation]
-A module $m_j$ designated as user-specific has negligible influence on outputs for other users.
+For $K \ll N$, a module $m_j$ designated as user-specific has negligible influence on outputs for other users. Specifically, for inputs $\mathbf{x}$ not associated with user $j$, the routing weight $w_j(\mathbf{x}) \approx 0$.
 \end{property}
 
 \noindent\textbf{Empirical evidence.} The sparse top-K routing mechanism means that at most $K$ modules contribute to any given output. When $K \ll N$, a user-specific module is selected only when the router deems it relevant. In our experiments with $K \ll N$, domain-specific modules receive near-zero routing weight on unrelated inputs, with discrimination ratios exceeding two orders of magnitude.
@@ -177,10 +179,10 @@ Can the sparse routing mechanism be shown to satisfy $(\epsilon, \delta)$-differ
 \label{sec:bounded}
 
 \begin{property}[Bounded Compute]
-Inference cost is $O(K)$ per position regardless of pool size $N$, where $K$ is the number of selected modules.
+Module execution cost is $O(K)$ per position, where $K$ is the number of selected modules. Router selection cost is $O(N)$.
 \end{property}
 
-\noindent This property follows directly from the architecture: top-K selection is $O(N)$ (or $O(N \log K)$ with a heap), and the composition step invokes exactly $K$ module forward passes. Since $K$ is fixed, inference is constant in $N$. This is the only property we consider proven from the architecture definition.
+\noindent This property follows directly from the architecture: the router evaluates affinities for all $N$ modules in $O(N)$ (or selects the top $K$ via a heap in $O(N \log K)$), while the composition step invokes exactly $K$ module forward passes. Total inference cost per position is therefore $O(N + K \cdot C_{\text{mod}})$, where $C_{\text{mod}}$ is the cost of a single module forward pass. When $C_{\text{mod}} \gg N$ (typical for transformer-based modules), total cost is dominated by the $K$ module executions and is effectively constant in $N$. However, for very large pools, the $O(N)$ router cost may become non-negligible, motivating hierarchical or approximate routing strategies. This is the only property we consider proven from the architecture definition.
 
 \subsection{Compositional Monotonicity}
 \label{sec:monotonicity}
@@ -196,6 +198,10 @@ Under what conditions on the module training procedure and router architecture d
 \end{conjecture}
 
 \noindent\textbf{Proof strategy.} This combines the non-degradation argument (router sample complexity) with a domain-specific improvement bound. The key insight is that if $m_j$ is the best available module for inputs from $\mathcal{D}_j$, the router will learn to select it, improving domain performance. The non-degradation bound constrains the cost on other domains.
+
+\begin{remark}
+Monotonicity as stated is pairwise: adding one module improves its domain without degrading others. This does not immediately imply transitivity---adding modules $m_a$ and $m_b$ individually may each satisfy the bound, but adding both may not, since the router must now allocate $K$ selections among a larger pool. A stronger compositional monotonicity result would require bounds on the interaction between simultaneously added modules.
+\end{remark}
 
 % ============================================================
 \section{Experimental Summary}
@@ -251,6 +257,17 @@ We claim that the structural constraints create mathematical objects (frozen fun
 The empirical evidence from 260+ experiments is encouraging but not sufficient.
 The research programme requires formal methods expertise, specifically in PAC learning theory~\cite{valiant1984theory}, information theory, differential privacy~\cite{dwork2014algorithmic}, and formal verification~\cite{katz2017reluplex}, to translate empirical observations into rigorous results.
 We invite contributions from these communities.
+
+\paragraph{Stated Assumptions.}
+The following assumptions underlie the properties in Section~\ref{sec:properties} and are made explicit here:
+\begin{enumerate}[nosep,leftmargin=*]
+  \item \textbf{Frozen backbone at inference.} The shared backbone (attention, embedding layers) is fixed during module composition. Backbone parameters do not change when modules are added, removed, or composed.
+  \item \textbf{Non-overlapping training data is NOT required.} Modules may be trained on overlapping data distributions. The independence guarantee comes from separate training processes (no shared gradients), not from data partitioning.
+  \item \textbf{Router retraining on pool changes.} When a module is added to or removed from $\mathcal{M}$, the router $R$ is retrained (or fine-tuned) on the updated pool. Existing module weights remain frozen during router retraining.
+  \item \textbf{Additive composition in shared space.} The composition rule (Equation~\ref{eq:composition}) is a convex combination in $\mathbb{R}^d$. The properties as stated assume this additive structure; alternative composition rules (e.g., sequential, multiplicative) would require separate analysis.
+  \item \textbf{$K$ is fixed and $K \ll N$.} The memory isolation and bounded compute properties assume $K$ is a fixed constant much smaller than $N$. At $K = N$, all modules contribute and isolation guarantees degrade.
+  \item \textbf{No minimum $N$ is established.} The empirical evidence is from pools of dozens of modules. Whether the properties hold at $N = 2$ or require a minimum pool size is an open question.
+\end{enumerate}
 
 \paragraph{Limitations.}
 The current experimental evidence is on a system with dozens of lightweight modules running on consumer hardware.
