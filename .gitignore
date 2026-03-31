@@ -1,7 +1,7 @@
+# Ignore internal working files
+*_PROMPT.md
+*.bak
 chat_backup/
-.project-state/
-.DS_Store
-*.aux
-*.log
-*.out
-*.synctex.gz
+decisions/
+PROJECT.md
+STATUS.md
