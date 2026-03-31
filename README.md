@@ -1,6 +1,6 @@
 # Compositional AI Systems with Verifiable Safety Properties
 
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.19196515.svg)](https://doi.org/10.5281/zenodo.19196515)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.19242790.svg)](https://doi.org/10.5281/zenodo.19242790)
 
 Mathematical framework for proving that modular compositional AI architectures provide verifiable safety guarantees that monolithic systems cannot.
 
@@ -12,7 +12,7 @@ Monolithic large language models cannot provide verifiable safety guarantees. Yo
 
 We study a modular architecture where **frozen expert modules** compose via **lightweight routing** in a **shared vector space**. The architecture is designed so that safety-relevant properties follow from the structure itself, not from post-hoc analysis.
 
-The system is implemented and experimentally validated across 37 expert modules spanning 10 knowledge domains.
+The system is implemented and experimentally validated across 44 expert modules spanning 15 knowledge domains and 346 experiments.
 
 ## Safety Properties Under Investigation
 
